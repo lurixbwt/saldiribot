@@ -1,5 +1,5 @@
 echo off
 cls
-echo açıyom botu abi
+echo Starting Bot
 node bot.js
-pause 
+pause
