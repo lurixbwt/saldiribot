@@ -15,7 +15,7 @@ const ayarlar = require('./ayarlar.json');
 const chalk = require('chalk');
 const fs = require('fs');
 const moment = require('moment');
-const db = require('quick.db');
+const db = require('wio.db');
 require('./util/eventLoader')(client);
 
 var prefix = ayarlar.prefix;

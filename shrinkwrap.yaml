@@ -64,7 +64,7 @@ dependencies:
   passport-strategy: 1.0.0
   path: 0.12.7
   pokedex-api: 1.1.2
-  quick.db: 7.0.0-b22
+  wio.db: 7.0.0-b22
   random-puppy: 1.1.0
   randomstring: 1.1.5
   request: 2.88.2
@@ -3362,7 +3362,7 @@ packages:
       node: '>=0.4.x'
     resolution:
       integrity: sha1-sgmEkgO7Jd+CDadW50cAWHhSFiA=
-  /quick.db/7.0.0-b22:
+  /wio.db/7.0.0-b22:
     dependencies:
       better-sqlite3: 5.4.3
       lodash.get: 4.4.2
@@ -4578,7 +4578,7 @@ specifiers:
   passport-strategy: ^1.0.0
   path: ^0.12.7
   pokedex-api: ^1.1.2
-  quick.db: ^7.0.0-b22
+  wio.db: ^7.0.0-b22
   random-puppy: ^1.1.0
   randomstring: ^1.1.5
   request: ^2.88.0
